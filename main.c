@@ -3,7 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <fcntl.h>
+// #include <fcntl.h>
+#include <sys/poll.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -12,34 +13,25 @@
 #define WIDTH  20
 #define HEIGTH WIDTH/2
 
-int grid[HEIGTH][WIDTH];
-
-float dt;
-
 #define IS_WALL(x, y) (x == 0 || x == (WIDTH - 1) || y == 0 || y == (HEIGTH - 1))
 
-void init_grid(void) {
-    for (size_t y = 0; y < HEIGTH; y++) {
-        for (size_t x = 0; x < WIDTH; x++) {
-            grid[y][x] = IS_WALL(x, y) ? 1 : 0 ;
-        }
-    }
+struct Game {
+    float last_frame;
+    int should_stop;
+    int grid[HEIGTH][WIDTH];
+    struct pollfd fds;
+};
+
+struct Game game = {0};
+
+double get_time_ms(void) {
+    struct timespec spec;
+    clock_gettime(CLOCK_REALTIME, &spec);
+    return spec.tv_sec + spec.tv_nsec/1.0e6;
 }
 
-const char* grid_table = " #";
-void draw_grid(void) {
-    if (!should_draw()) return;
-    printf("\033[0;1f\n");
-    for (size_t y = 0; y < HEIGTH; y++) {
-        for (size_t x = 0; x < WIDTH; x++) {
-            printf("%c", grid_table[grid[y][x]]);
-        }
-        printf("\n");
-    }
-}
-
-int should_draw(void) {
-    return dt > 1/60.0;
+double get_dt_ms(void) {
+    return get_time_ms() - game.last_frame;
 }
 
 struct termios old_term;
@@ -55,49 +47,74 @@ void enable_raw_mode(void) {
     struct termios raw = old_term;
     raw.c_lflag &= ~(ECHO | ICANON);
 
-    tcsetattr(STDOUT_FILENO, TCSAFLUSH, &raw);
-    fcntl(STDOUT_FILENO, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
-double get_time_ms(void) {
-    struct timespec spec;
-    clock_gettime(CLOCK_REALTIME, &spec);
-    return spec.tv_sec*1e3 + spec.tv_nsec/1.0e6;
+int has_input(void) {
+    return poll(&game.fds, 1, 0);
 }
 
-void update(int* should_stop) {
+void update() {
     char c;
-    read(STDIN_FILENO, &c, 1);
-    switch (c) {
-        case 'w': {} break;
-
-        case 'a': {} break;
-
-        case 'd': {} break;
-
-        case 's': {} break;
-
-        case 'q': {
-            *should_stop = 1;
-        } break;
-
-        default: {} break;
+    if (has_input()) {
+        read(STDIN_FILENO, &c, 1);
+        switch (c) {
+            case 'w': {} break;
+            case 'a': {} break;
+            case 'd': {} break;
+            case 's': {} break;
+            case 'q': { game.should_stop = 1; } break;
+            default: {} break;
+        }
     }
+}
+
+int should_draw(void) {
+    if (get_dt_ms() >= 1/60.0) {
+        game.last_frame = get_time_ms();
+        return 1;
+    }
+
+    return 0;
+}
+
+void draw_grid(void) {
+    static const char* grid_table = " #";
+    printf("\033[0;0f");
+    for (size_t y = 0; y < HEIGTH; y++) {
+        for (size_t x = 0; x < WIDTH; x++) {
+            printf("%c", grid_table[game.grid[y][x]]);
+        }
+        printf("\n");
+    }
+}
+
+void init_grid(void) {
+    for (size_t y = 0; y < HEIGTH; y++) {
+        for (size_t x = 0; x < WIDTH; x++) {
+            game.grid[y][x] = IS_WALL(x, y) ? 1 : 0 ;
+        }
+    }
+}
+
+void clear(void) {
+    printf("\033[2J");
+}
+
+void init(void) {
+    game.last_frame = get_time_ms();
+    game.should_stop = 0;
+    game.fds.fd = STDIN_FILENO;
+    game.fds.events = POLLIN;
+    init_grid();
+    enable_raw_mode();
 }
 
 int main(void) {
-    double last_frame = get_time_ms();
-    while (1) {
-        if (last_frame - get_time_ms() > 1/60.0) {
-            printf("hello\n");
-        }
-    }
-    return 0;
-    int should_stop = 0;
-    enable_raw_mode();
-    init_grid();
-    while (!should_stop) {
-        update(&should_stop);
+    init();
+    clear();
+    while (!game.should_stop) {
+        update();
         draw_grid();
     }
 }
