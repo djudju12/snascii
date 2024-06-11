@@ -13,6 +13,10 @@
 #define HEIGTH WIDTH/2
 #define IS_WALL(x, y) (x == 0 || x == (WIDTH - 1) || y == 0 || y == (HEIGTH - 1))
 
+typedef struct {
+    int x, y;
+} Vec2;
+
 struct Game {
     float last_frame;
     int should_stop;
@@ -28,14 +32,29 @@ typedef enum {
     RIGHT  = 'd'
 } Direction;
 
-typedef struct {
-    int x, y;
-} Vec2;
+enum Objects {
+    BLANK_SPACE = 0,
+    WALL,
+    SNAKE,
+    APPLE
+};
+
+typedef struct Body_Part Body_Part;
+
+struct Body_Part {
+    Vec2 pos;
+    Body_Part* next;
+    Body_Part* prev;
+};
 
 #define MAX_SIZE 20
+
+Body_Part body_part_poll[MAX_SIZE];
+
 struct Snake {
     int size;
-    Vec2 body[MAX_SIZE];
+    Body_Part* head;
+    Body_Part* tail;
     Direction direction;
 };
 
@@ -93,65 +112,89 @@ void update() {
     }
 
     for (int i = 0; i < snake.size; i++) {
-        Vec2 pos = snake.body[i];
-        game.grid[pos.y][pos.x] = 2;
+        Vec2 pos = body_part_poll[i].pos;
+        game.grid[pos.y][pos.x] = SNAKE;
     }
 
-    float dt = get_delta_time();
-    if (dt >= 1/8.0) {
-        Vec2 head = snake.body[0];
-        if (game.grid[head.y][head.y] == '*') {
-            snake.size += 1;
-            if (snake.size == MAX_SIZE) exit(1);
-            for (int i = snake.size; i >= 1; i++) {
-                snake.body[i + 1] = snake.body[i];
-            }
-        } else {
-            for (int i = 0; i < snake.size; i++) {
-                snake.body[i + 1] = snake.body[i];
-            }
-        }
+    game.grid[game.apple.y][game.apple.x] = APPLE;
 
+    float dt = get_delta_time();
+    if (dt >= 1/6.0) {
         game.last_frame = get_time_sec();
+
+        Vec2 next_move = snake.head->pos;
         switch (snake.direction) {
             case UP: {
-                head.y -= 1;
+                next_move.y -= 1;
             } break;
 
             case DOWN: {
-                head.y += 1;
+                next_move.y += 1;
             } break;
 
             case LEFT: {
-                head.x -= 2;
+                next_move.x -= 1;
             } break;
 
             case RIGHT: {
-                head.x += 2;
+                next_move.x += 1;
             } break;
 
             default: {} break;
         }
 
-        if      (head.x >= (WIDTH - 1)) head.x = 1;
-        else if (head.x <= 0)           head.x = WIDTH - 2;
+        if      (next_move.x >= (WIDTH - 1)) next_move.x = 1;
+        else if (next_move.x <= 0)           next_move.x = WIDTH - 2;
 
-        if      (head.y == (HEIGTH - 1)) head.y = 1;
-        else if (head.y == 0)            head.y = HEIGTH - 2;
+        if      (next_move.y == (HEIGTH - 1)) next_move.y = 1;
+        else if (next_move.y == 0)            next_move.y = HEIGTH - 2;
 
-        snake.body[0] = head;
+        Body_Part* new_head = NULL;
+        if (game.grid[next_move.y][next_move.x] == APPLE) {
+            if (snake.size >= MAX_SIZE - 1) {
+                game.should_stop = 1;
+            } else {
+                new_head = &body_part_poll[snake.size++];
+                new_head->next = snake.head;
+                new_head->prev = NULL;
+                snake.head->prev = new_head;
+                snake.head = new_head;
+                if (snake.size == 2) {
+                    snake.tail = snake.head->next;
+                }
+                generate_apple();
+            }
+        } else {
+            new_head = snake.tail;
+            if (new_head != NULL) {
+                snake.head->prev = new_head;
+                new_head->next = snake.head;
+                snake.head = new_head;
+
+                snake.tail = new_head->prev;
+                snake.tail->next = NULL;
+                snake.head->prev = NULL;
+            }
+        }
+
+        snake.head->pos.x = next_move.x;
+        snake.head->pos.y = next_move.y;
     }
+}
+
+void generate_apple(void) {
+    game.apple.x += 1;
 }
 
 void clear(void) {
     for (size_t y = 0; y < HEIGTH; y++) {
         for (size_t x = 0; x < WIDTH; x++) {
-            game.grid[y][x] = IS_WALL(x, y) ? 1 : 0;
+            game.grid[y][x] = IS_WALL(x, y) ? WALL : BLANK_SPACE;
         }
     }
 }
 
-static const char* grid_table = " #o*";
+static const char* grid_table = " #M*";
 void draw_grid(void) {
     printf("\033[0;0f");
     for (size_t y = 0; y < HEIGTH; y++) {
@@ -169,13 +212,15 @@ int main(void) {
     game.fds.fd = STDIN_FILENO;
     game.fds.events = POLLIN;
 
-    snake.body[0].x = WIDTH/2;
-    snake.body[0].y = HEIGTH/2;
+    game.apple.x = 1;
+    game.apple.y = HEIGTH / 2;
 
-    snake.body[1].x = WIDTH/2;
-    snake.body[1].y = HEIGTH/2 + 1;
-
-    snake.size = 2;
+    snake.head = &body_part_poll[snake.size++];
+    snake.head->pos.x = WIDTH/2;
+    snake.head->pos.y = HEIGTH/2;
+    snake.head->next = NULL;
+    snake.head->prev = NULL;
+    snake.tail = NULL;
     snake.direction = UP;
 
     enable_raw_mode();
