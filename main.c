@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <math.h>
+
 #include <sys/poll.h>
 #include <termios.h>
 #include <unistd.h>
@@ -95,6 +97,10 @@ int has_input(void) {
     return poll(&game.fds, 1, 0);
 }
 
+void generate_apple(void) {
+    game.apple.x += 1;
+}
+
 void update() {
     char c;
     if (has_input()) {
@@ -112,77 +118,84 @@ void update() {
         }
     }
 
-    for (int i = 0; i < snake.size; i++) {
-        Vec2 pos = body_part_poll[i].pos;
-        game.grid[(int) pos.y][(int) pos.x] = SNAKE;
+    for (Body_Part* body = snake.head; body != NULL; body = body->next) {
+        Vec2 pos = body->pos;
+        int x = pos.x;
+        int y = pos.y;
+        game.grid[y][x] = SNAKE;
     }
 
     game.grid[(int) game.apple.y][(int) game.apple.x] = APPLE;
 
-    float dt = get_delta_time();
+    double dt = get_delta_time();
     game.last_frame = get_time_sec();
 
     Vec2 next_move = snake.head->pos;
     switch (snake.direction) {
         case UP: {
-            next_move.y -= (dt*snake.vel.y);
+            next_move.y = next_move.y - dt*snake.vel.y;
         } break;
 
         case DOWN: {
-            next_move.y += (dt*snake.vel.y);
+            next_move.y = next_move.y + dt*snake.vel.y;
         } break;
 
         case LEFT: {
-            next_move.x -= (dt*snake.vel.x);
+            next_move.x = next_move.x - dt*snake.vel.x;
         } break;
 
         case RIGHT: {
-            next_move.x += (dt*snake.vel.x);
+            next_move.x = next_move.x + dt*snake.vel.x;
         } break;
 
         default: {} break;
     }
 
-    if      (next_move.x >= (WIDTH - 1)) next_move.x = 1;
-    else if (next_move.x <= 0)           next_move.x = WIDTH - 2;
+    int nx = next_move.x;
+    int ny = next_move.y;
 
-    if      (next_move.y == (HEIGTH - 1)) next_move.y = 1;
-    else if (next_move.y == 0)            next_move.y = HEIGTH - 2;
+    int move = nx != (int) snake.head->pos.x || ny != (int) snake.head->pos.y;
+    if (move) {
 
-    Body_Part* new_head = NULL;
-    if (game.grid[(int) next_move.y][(int) next_move.x] == APPLE) {
-        if (snake.size >= MAX_SIZE - 1) {
-            game.should_stop = 1;
-        } else {
-            new_head = &body_part_poll[snake.size++];
-            new_head->next = snake.head;
-            new_head->prev = NULL;
-            snake.head->prev = new_head;
-            snake.head = new_head;
-            if (snake.size == 2) {
-                snake.tail = snake.head->next;
+        if      (nx == (WIDTH - 1))  nx = 1;
+        else if (nx == 0)            nx = WIDTH - 2;
+
+        if      (ny == (HEIGTH - 1)) ny = 1;
+        else if (ny == 0)            ny = HEIGTH - 2;
+
+        Body_Part* new_head = NULL;
+        if (game.grid[ny][nx] == APPLE) {
+            if (snake.size >= MAX_SIZE - 1) {
+                game.should_stop = 1;
+            } else {
+                new_head = &body_part_poll[snake.size];
+                snake.size += 1;
+                new_head->next = snake.head;
+                new_head->prev = NULL;
+                snake.head->prev = new_head;
+                snake.head = new_head;
+                if (snake.size == 2) {
+                    snake.tail = snake.head->next;
+                }
+                generate_apple();
             }
-            generate_apple();
-        }
-    } else {
-        new_head = snake.tail;
-        if (new_head != NULL) {
-            snake.head->prev = new_head;
-            new_head->next = snake.head;
-            snake.head = new_head;
+        } else {
+            new_head = snake.tail;
+            if (new_head != NULL) {
+                snake.head->prev = new_head;
+                new_head->next = snake.head;
+                snake.head = new_head;
 
-            snake.tail = new_head->prev;
-            snake.tail->next = NULL;
-            snake.head->prev = NULL;
+                snake.tail = new_head->prev;
+                snake.tail->next = NULL;
+                snake.head->prev = NULL;
+            }
         }
     }
 
     snake.head->pos.x = next_move.x;
     snake.head->pos.y = next_move.y;
-}
-
-void generate_apple(void) {
-    game.apple.x += 1;
+    usleep(1000);
 }
 
 void clear(void) {
@@ -193,7 +206,7 @@ void clear(void) {
     }
 }
 
-static const char* grid_table = " #M*";
+static const char* grid_table = " #O*";
 void draw_grid(void) {
     printf("\033[0;0f");
     for (size_t y = 0; y < HEIGTH; y++) {
@@ -204,7 +217,6 @@ void draw_grid(void) {
     }
 
     printf("score: %2d\n", snake.size - 1);
-    printf("%ld %ld \n", (int) snake.head->pos.x, (int) snake.head->pos.y);
 }
 
 int main(void) {
@@ -222,15 +234,15 @@ int main(void) {
     snake.head->prev = NULL;
     snake.tail = NULL;
 
-    snake.vel.x = 10;
-    snake.vel.y = 6;
+    snake.vel.x = 7;
+    snake.vel.y = 5;
     snake.direction = UP;
 
     enable_raw_mode();
     game.last_frame = get_time_sec();
     while (!game.should_stop) {
+        clear();
         update();
         draw_grid();
-        clear();
     }
 }
