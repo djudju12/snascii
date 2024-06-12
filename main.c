@@ -157,11 +157,11 @@ void update() {
     int move = nx != (int) snake.head->pos.x || ny != (int) snake.head->pos.y;
     if (move) {
 
-        if      (nx == (WIDTH - 1))  nx = 1;
-        else if (nx == 0)            nx = WIDTH - 2;
+        if      (nx == (WIDTH - 1))  next_move.x = nx = 1;
+        else if (nx == 0)            next_move.x = nx = WIDTH - 2;
 
-        if      (ny == (HEIGTH - 1)) ny = 1;
-        else if (ny == 0)            ny = HEIGTH - 2;
+        if      (ny == (HEIGTH - 1)) next_move.y = ny = 1;
+        else if (ny == 0)            next_move.y = ny = HEIGTH - 1;
 
         Body_Part* new_head = NULL;
         if (game.grid[ny][nx] == APPLE) {
