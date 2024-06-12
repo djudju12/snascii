@@ -21,10 +21,11 @@ typedef struct {
 
 struct Game {
     float last_frame;
-    int should_stop;
+    int stop;
+    int over;
     int grid[HEIGTH][WIDTH];
-    struct pollfd fds;
     Vec2 apple;
+    struct pollfd fds;
 };
 
 typedef enum {
@@ -97,21 +98,12 @@ int has_input(void) {
     return poll(&game.fds, 1, 0);
 }
 
-int is_in_snake(int x, int y) {
-    for (Body_Part* body = snake.head; body != NULL; body = body->next) {
-        Vec2 pos = body->pos;
-        if ((int) pos.x == x || (int) pos.y == y) return 1;
-    }
-
-    return 0;
-}
-
 void generate_apple(void) {
     int x, y;
     do {
-        x = rand() % (WIDTH - 1);
-        y = rand() % (HEIGTH - 1);
-    } while (is_in_snake(x, y));
+        x = (rand() % (WIDTH - 2)) + 1;
+        y = (rand() % (HEIGTH - 2)) + 1;
+    } while (game.grid[y][x] == SNAKE);
 
     game.apple.x = x;
     game.apple.y = y;
@@ -127,13 +119,14 @@ void update() {
             } break;
 
             case 'q': {
-                game.should_stop = 1;
+                game.stop = 1;
             } break;
 
             default: {} break;
         }
     }
 
+    game.grid[(int) game.apple.y][(int) game.apple.x] = APPLE;
     for (Body_Part* body = snake.head; body != NULL; body = body->next) {
         Vec2 pos = body->pos;
         int x = pos.x;
@@ -141,11 +134,8 @@ void update() {
         game.grid[y][x] = SNAKE;
     }
 
-    game.grid[(int) game.apple.y][(int) game.apple.x] = APPLE;
-
     double dt = get_delta_time();
     game.last_frame = get_time_sec();
-
     Vec2 next_move = snake.head->pos;
     switch (snake.direction) {
         case UP: {
@@ -169,10 +159,8 @@ void update() {
 
     int nx = next_move.x;
     int ny = next_move.y;
-
     int move = nx != (int) snake.head->pos.x || ny != (int) snake.head->pos.y;
     if (move) {
-
         if      (nx == (WIDTH - 1))  next_move.x = nx = 1;
         else if (nx == 0)            next_move.x = nx = WIDTH - 2;
 
@@ -182,7 +170,7 @@ void update() {
         Body_Part* new_head = NULL;
         if (game.grid[ny][nx] == APPLE) {
             if (snake.size >= MAX_SIZE - 1) {
-                game.should_stop = 1;
+                game.stop = 1;
             } else {
                 new_head = &body_part_poll[snake.size];
                 snake.size += 1;
@@ -195,6 +183,8 @@ void update() {
                 }
                 generate_apple();
             }
+        } else if (game.grid[ny][nx] == SNAKE) {
+            game.over = 1;
         } else {
             new_head = snake.tail;
             if (new_head != NULL) {
@@ -233,10 +223,18 @@ void draw_grid(void) {
     }
 
     printf("score: %2d\n", snake.size - 1);
+    if (game.over) {
+        printf("game over!");
+    }
+}
+
+int should_stop(void) {
+    return game.over || game.stop;
 }
 
 int main(void) {
-    game.should_stop = 0;
+    game.stop = 0;
+    game.over = 0;
     game.fds.fd = STDIN_FILENO;
     game.fds.events = POLLIN;
 
@@ -258,7 +256,7 @@ int main(void) {
 
     enable_raw_mode();
     game.last_frame = get_time_sec();
-    while (!game.should_stop) {
+    while (!should_stop()) {
         clear();
         update();
         draw_grid();
