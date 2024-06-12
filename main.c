@@ -97,8 +97,24 @@ int has_input(void) {
     return poll(&game.fds, 1, 0);
 }
 
+int is_in_snake(int x, int y) {
+    for (Body_Part* body = snake.head; body != NULL; body = body->next) {
+        Vec2 pos = body->pos;
+        if ((int) pos.x == x || (int) pos.y == y) return 1;
+    }
+
+    return 0;
+}
+
 void generate_apple(void) {
-    game.apple.x += 1;
+    int x, y;
+    do {
+        x = rand() % (WIDTH - 1);
+        y = rand() % (HEIGTH - 1);
+    } while (is_in_snake(x, y));
+
+    game.apple.x = x;
+    game.apple.y = y;
 }
 
 void update() {
@@ -237,6 +253,8 @@ int main(void) {
     snake.vel.x = 7;
     snake.vel.y = 5;
     snake.direction = UP;
+
+    srand(time(NULL));
 
     enable_raw_mode();
     game.last_frame = get_time_sec();
