@@ -78,18 +78,18 @@ double get_delta_time(void) {
 struct termios old_term;
 
 void disable_raw_mode(void) {
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &old_term);
+    tcsetattr(game.fds.fd, TCSAFLUSH, &old_term);
     printf("\e[?25h");
 }
 
 void enable_raw_mode(void) {
-    tcgetattr(STDIN_FILENO, &old_term);
+    tcgetattr(game.fds.fd, &old_term);
     atexit(disable_raw_mode);
 
     struct termios raw = old_term;
     raw.c_lflag &= ~(ECHO | ICANON);
 
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+    tcsetattr(game.fds.fd, TCSAFLUSH, &raw);
     printf("\e[?25l");
     printf("\033[2J");
 }
@@ -114,8 +114,20 @@ void update() {
     if (has_input()) {
         read(STDIN_FILENO, &c, 1);
         switch (c) {
-            case UP: case DOWN: case LEFT: case RIGHT: {
-                snake.direction = c;
+            case UP: {
+                if (snake.direction != DOWN) snake.direction = c;
+            } break;
+
+            case DOWN: {
+                if (snake.direction != UP) snake.direction = c;
+            } break;
+
+            case LEFT: {
+                if (snake.direction != RIGHT) snake.direction = c;
+            } break;
+
+            case RIGHT: {
+                if (snake.direction != LEFT) snake.direction = c;
             } break;
 
             case 'q': {
@@ -201,7 +213,7 @@ void update() {
 
     snake.head->pos.x = next_move.x;
     snake.head->pos.y = next_move.y;
-    usleep(1000);
+    usleep(100);
 }
 
 void clear(void) {
@@ -224,7 +236,8 @@ void draw_grid(void) {
 
     printf("score: %2d\n", snake.size - 1);
     if (game.over) {
-        printf("game over!");
+
+        printf("game over!\n");
     }
 }
 
