@@ -174,7 +174,7 @@ void update() {
     int move = nx != (int) snake.head->pos.x || ny != (int) snake.head->pos.y;
     if (move) {
         if      (nx == (WIDTH - 1))  next_move.x = nx = 1;
-        else if (nx == 0)            next_move.x = nx = WIDTH - 2;
+        else if (nx == 0)            next_move.x = nx = WIDTH - 1;
 
         if      (ny == (HEIGTH - 1)) next_move.y = ny = 1;
         else if (ny == 0)            next_move.y = ny = HEIGTH - 1;
@@ -213,7 +213,7 @@ void update() {
 
     snake.head->pos.x = next_move.x;
     snake.head->pos.y = next_move.y;
-    usleep(100);
+    usleep(1000);
 }
 
 void clear(void) {
@@ -236,13 +236,12 @@ void draw_grid(void) {
 
     printf("score: %2d\n", snake.size - 1);
     if (game.over) {
-
         printf("game over!\n");
     }
 }
 
 int should_stop(void) {
-    return game.over || game.stop;
+    return game.stop || game.over;
 }
 
 int main(void) {
